@@ -587,6 +587,10 @@ def generate_global_summary(df, players_df, teams_dict):
     except Exception as e:
         return f"Error generando resumen: {str(e)}"
 
+def save_granular_chart(df, team_name, plot_func, filename, *args):
+    fig, ax = plt.subplots(figsize=(12, 8), facecolor=bg_color)
+    plot_func(df, team_name, ax, *args)
+    plt.tight_layout()
     plt.savefig(os.path.join(STATIC_DIR, filename))
     
     buf = BytesIO()
@@ -612,6 +616,9 @@ def generate_all_reports(df, teams_dict):
         }
     }
     
+    # 1. Momentum (Global)
+    fig, ax = plt.subplots(figsize=(16, 6), facecolor=bg_color)
+    plot_momentum(df, hteam, ateam, ax)
     plt.tight_layout()
     plt.savefig(os.path.join(STATIC_DIR, 'match_momentum.png'))
     
