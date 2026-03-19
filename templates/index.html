@@ -202,7 +202,7 @@
     {% endif %}
 
     {% if images %}
-    <div class="tabs">
+    <div class="tabs" id="tabs-container">
         {% for cat in images.keys() %}
             <button class="tab-btn {% if loop.first %}active{% endif %}" onclick="showTab('{{ cat }}', this)">{{ cat }}</button>
         {% endfor %}
@@ -211,12 +211,45 @@
     <div id="results-area">
         {% for cat, imgs in images.items() %}
             <div class="results-grid tab-content" id="tab-{{ cat }}" style="display: {% if loop.first %}grid{% else %}none{% endif %};">
-                {% for img_obj in imgs %}
-                <div class="card" onclick="openModal('{{ url_for('static', filename=img_obj.name) }}')">
-                    <img src="{{ url_for('static', filename=img_obj.name) }}" alt="{{ img_obj.label }}">
-                    <div class="card-label">{{ img_obj.label }}</div>
-                </div>
-                {% endfor %}
+                {% if cat == 'Jugadores' %}
+                    <div class="player-selector-container" style="grid-column: 1 / -1; background: #1c2128; padding: 30px; border-radius: 16px; border: 1px solid #30363d;">
+                        <h3 style="margin-top:0; color:var(--secondary);">Análisis de Jugadores</h3>
+                        <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:20px;">
+                            <div style="flex:1; min-width:250px;">
+                                <label style="display:block; margin-bottom:10px; color:#8b949e;">Jugador 1</label>
+                                <select id="player-select-1" style="width:100%; padding:12px; background:#0d1117; color:white; border:1px solid #30363d; border-radius:8px;">
+                                    <option value="">Selecciona un jugador...</option>
+                                </select>
+                            </div>
+                            <div id="compare-col" style="flex:1; min-width:250px; display:none;">
+                                <label style="display:block; margin-bottom:10px; color:#8b949e;">Jugador 2 (Comparativa)</label>
+                                <select id="player-select-2" style="width:100%; padding:12px; background:#0d1117; color:white; border:1px solid #30363d; border-radius:8px;">
+                                    <option value="">Selecciona un jugador...</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:15px;">
+                            <button onclick="requestPlayerAnalysis(1)" id="btn-analyze-1">Ver Análisis</button>
+                            <button onclick="toggleComparison()" id="btn-compare" style="background:transparent; border:1px solid var(--secondary); color:var(--secondary);">Añadir Comparación</button>
+                        </div>
+                        
+                        <div id="player-results-grid" style="display:grid; grid-template-columns: 1fr; gap:20px; margin-top:30px;">
+                            <div id="player-card-1" class="card" style="display:none; cursor:default;">
+                                <img src="" id="player-img-1" onclick="openModal(this.src)" style="cursor:zoom-in;">
+                            </div>
+                            <div id="player-card-2" class="card" style="display:none; cursor:default;">
+                                <img src="" id="player-img-2" onclick="openModal(this.src)" style="cursor:zoom-in;">
+                            </div>
+                        </div>
+                    </div>
+                {% else %}
+                    {% for img_obj in imgs %}
+                    <div class="card" onclick="openModal('{{ url_for('static', filename=img_obj.name) if img_obj.name else img_obj }}')">
+                        <img src="{{ url_for('static', filename=img_obj.name) if img_obj.name else img_obj }}" alt="{{ img_obj.label }}">
+                        <div class="card-label">{{ img_obj.label }}</div>
+                    </div>
+                    {% endfor %}
+                {% endif %}
             </div>
         {% endfor %}
     </div>
@@ -227,11 +260,22 @@
     </div>
 
     <script>
+        let globalPlayersList = {};
+        let currentUrl = "";
+
+        // Inicializar si ya hay datos
+        window.addEventListener('load', () => {
+            {% if images and images.Jugadores %}
+                // En local, podrías pre-poblar players_list si se pasara, pero preferimos dejarlo dinámico
+            {% endif %}
+        });
+
         function showTab(cat, btn) {
             document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-            document.getElementById('tab-' + cat).style.display = 'grid';
-            btn.classList.add('active');
+            const tab = document.getElementById('tab-' + cat);
+            if (tab) tab.style.display = 'grid';
+            if (btn) btn.classList.add('active');
         }
 
         function openModal(src) {
@@ -242,9 +286,10 @@
         function startAnalysis() {
             const url = document.getElementById('match-url').value;
             if (!url) return alert("Ingresa una URL de WhoScored");
+            currentUrl = url;
             
             document.getElementById('status-box').style.display = 'block';
-            document.getElementById('status-text').innerText = "Analizando (esto puede tardar 20-30s en Vercel)...";
+            document.getElementById('status-text').innerText = "Analizando partido (20-30s)...";
             document.getElementById('progress-fill').style.width = '10%';
             
             fetch('/analyze', {
@@ -255,10 +300,8 @@
             .then(r => r.json())
             .then(data => {
                 if (data.results) {
-                    // Caso Vercel: Resultados síncronos
                     renderResults(data.results);
                 } else if (data.message) {
-                    // Caso Local: Segundo plano
                     poll();
                 } else {
                     alert("Error: " + (data.error || "Desconocido"));
@@ -266,15 +309,16 @@
             })
             .catch(err => {
                 console.error(err);
-                alert("Error en la conexión. Vercel puede haber agotado el tiempo (timeout).");
+                alert("Error en la conexión.");
             });
         }
 
         function renderResults(res) {
             document.getElementById('status-text').innerText = "¡Completado!";
             document.getElementById('progress-fill').style.width = '100%';
+            globalPlayersList = res.players_list;
             
-            // 1. Mostrar Resumen
+            // 1. Resumen
             let summaryDiv = document.getElementById('summary-content');
             if (!summaryDiv) {
                 summaryDiv = document.createElement('div');
@@ -284,42 +328,128 @@
             }
             summaryDiv.innerHTML = marked.parse(res.summary);
 
-            // 2. Generar Tabs y Contenido
-            const tabsDiv = document.createElement('div');
-            tabsDiv.className = 'tabs';
-            const resultsArea = document.createElement('div');
-            resultsArea.id = 'results-area';
+            // 2. Tabs y Contenido
+            const tabsContainer = document.getElementById('tabs-container');
+            tabsContainer.innerHTML = '';
+            const resultsArea = document.getElementById('results-area');
+            resultsArea.innerHTML = '';
 
             Object.entries(res.images).forEach(([cat, imgs], idx) => {
                 const btn = document.createElement('button');
                 btn.className = `tab-btn ${idx === 0 ? 'active' : ''}`;
                 btn.innerText = cat;
                 btn.onclick = (e) => showTab(cat, e.target);
-                tabsDiv.appendChild(btn);
+                tabsContainer.appendChild(btn);
 
                 const grid = document.createElement('div');
                 grid.className = 'results-grid tab-content';
                 grid.id = 'tab-' + cat;
                 grid.style.display = idx === 0 ? 'grid' : 'none';
 
-                imgs.forEach(img => {
-                    const card = document.createElement('div');
-                    card.className = 'card';
-                    card.onclick = () => openModal(img.name);
-                    card.innerHTML = `<img src="${img.name}" alt="${img.label}"><div class="card-label">${img.label}</div>`;
-                    grid.appendChild(card);
-                });
+                if (cat === 'Jugadores') {
+                    grid.innerHTML = `
+                        <div class="player-selector-container" style="grid-column: 1 / -1; background: #1c2128; padding: 30px; border-radius: 16px; border: 1px solid #30363d;">
+                            <h3 style="margin-top:0; color:var(--secondary);">Análisis de Jugadores</h3>
+                            <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:20px;">
+                                <div style="flex:1; min-width:200px;">
+                                    <label style="display:block; margin-bottom:10px; color:#8b949e;">Jugador 1</label>
+                                    <select id="player-select-1" style="width:100%; padding:12px; background:#0d1117; color:white; border:1px solid #30363d; border-radius:8px;"></select>
+                                </div>
+                                <div id="compare-col" style="flex:1; min-width:200px; display:none;">
+                                    <label style="display:block; margin-bottom:10px; color:#8b949e;">Jugador 2 (Comparativa)</label>
+                                    <select id="player-select-2" style="width:100%; padding:12px; background:#0d1117; color:white; border:1px solid #30363d; border-radius:8px;"></select>
+                                </div>
+                            </div>
+                            <div style="display:flex; gap:15px;">
+                                <button onclick="requestPlayerAnalysis(1)" id="btn-analyze-1">Ver Análisis</button>
+                                <button onclick="toggleComparison()" id="btn-compare" style="background:transparent; border:1px solid var(--secondary); color:var(--secondary);">Añadir Comparación</button>
+                            </div>
+                            <div id="player-results-grid" style="display:grid; grid-template-columns: 1fr; gap:20px; margin-top:30px;">
+                                <div id="player-card-1" class="card" style="display:none; cursor:default;"><img src="" id="player-img-1" onclick="openModal(this.src)" style="cursor:zoom-in;"></div>
+                                <div id="player-card-2" class="card" style="display:none; cursor:default;"><img src="" id="player-img-2" onclick="openModal(this.src)" style="cursor:zoom-in;"></div>
+                            </div>
+                        </div>`;
+                    populatePlayerSelects();
+                } else {
+                    imgs.forEach(img => {
+                        const card = document.createElement('div');
+                        card.className = 'card';
+                        const imgSrc = img.name || img;
+                        card.onclick = () => openModal(imgSrc);
+                        card.innerHTML = `<img src="${imgSrc}" alt="${img.label || ''}"><div class="card-label">${img.label || ''}</div>`;
+                        grid.appendChild(card);
+                    });
+                }
                 resultsArea.appendChild(grid);
             });
+        }
 
-            // Limpiar área vieja y añadir nueva
-            const oldTabs = document.querySelector('.tabs');
-            const oldArea = document.getElementById('results-area');
-            if (oldTabs) oldTabs.remove();
-            if (oldArea) oldArea.remove();
+        function populatePlayerSelects() {
+            const s1 = document.getElementById('player-select-1');
+            const s2 = document.getElementById('player-select-2');
+            if(!s1 || !s2) return;
+            s1.innerHTML = '<option value="">Selecciona un jugador...</option>';
+            s2.innerHTML = '<option value="">Selecciona un jugador...</option>';
             
-            summaryDiv.after(tabsDiv);
-            tabsDiv.after(resultsArea);
+            Object.entries(globalPlayersList).forEach(([team, players]) => {
+                const group1 = document.createElement('optgroup');
+                group1.label = team;
+                const group2 = document.createElement('optgroup');
+                group2.label = team;
+                
+                players.sort((a,b) => a.name.localeCompare(b.name)).forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.name;
+                    opt.innerText = `${p.shirtNo}. ${p.name} (${p.position})`;
+                    group1.appendChild(opt);
+                    group2.appendChild(opt.cloneNode(true));
+                });
+                s1.appendChild(group1);
+                s2.appendChild(group2);
+            });
+        }
+
+        function toggleComparison() {
+            const col = document.getElementById('compare-col');
+            const grid = document.getElementById('player-results-grid');
+            if (col.style.display === 'none') {
+                col.style.display = 'block';
+                grid.style.gridTemplateColumns = '1fr 1fr';
+                document.getElementById('btn-compare').innerText = 'Quitar Comparación';
+            } else {
+                col.style.display = 'none';
+                grid.style.gridTemplateColumns = '1fr';
+                document.getElementById('btn-compare').innerText = 'Añadir Comparación';
+                document.getElementById('player-card-2').style.display = 'none';
+            }
+        }
+
+        async function requestPlayerAnalysis(num) {
+            const player = document.getElementById('player-select-' + num).value;
+            if (!player) return alert("Selecciona un jugador");
+            
+            const btn = document.getElementById('btn-analyze-1');
+            const oldText = btn.innerText;
+            btn.innerText = "Analizando...";
+            btn.disabled = true;
+
+            try {
+                const r = await fetch('/analyze_player', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: currentUrl, player: player })
+                });
+                const data = await r.json();
+                if (data.image) {
+                    document.getElementById('player-card-' + num).style.display = 'block';
+                    document.getElementById('player-img-' + num).src = data.image;
+                } else {
+                    alert("Error: " + data.error);
+                }
+            } catch (err) { alert("Error al cargar jugador"); }
+            
+            btn.innerText = oldText;
+            btn.disabled = false;
         }
 
         function poll() {

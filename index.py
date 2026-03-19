@@ -442,10 +442,15 @@ def plot_team_defensive_actions(df, team_name, ax, color):
     pitch = Pitch(pitch_type='uefa', pitch_color=bg_color, line_color=line_color, linewidth=2)
     pitch.draw(ax=ax)
     
-    def_types = ['Tackle', 'Interception', 'BallRecovery', 'Clearance', 'BlockedPass']
-    def_acts = df[(df['teamName'] == team_name) & (df['type_name'].isin(def_types))]
+    def_types = ['Tackle', 'Interception', 'BallRecovery', 'Clearance', 'BlockedPass', 'Foul', 'GoalKeeperDetail']
+    # Check for both successful and unsuccessful tackle/interception etc.
+    def_acts = df[(df['teamName'] == team_name) & (df['type_name'].str.contains('Tackle|Interception|Recovery|Clearance|Blocked|Foul', case=False, na=False))]
     
-    if def_acts.empty: return
+    # print(f"DEBUG: Found {len(def_acts)} defensive acts for {team_name}")
+    if def_acts.empty: 
+        # try even more inclusive
+        def_acts = df[(df['teamName'] == team_name) & (df['type_name'].isin(['Tackle', 'Interception', 'BallRecovery', 'Clearance', 'BlockedPass']))]
+        if def_acts.empty: return
     
     # Heatmap of defensive actions
     sns.kdeplot(x=def_acts.x, y=def_acts.y, ax=ax, fill=True, cmap='Blues', alpha=0.3, levels=5)
@@ -498,53 +503,64 @@ def plot_player_defensive_acts(df, pname, ax, color):
         
     ax.set_title(f"Acciones Defensivas: {pname}", color=line_color, fontsize=12, fontweight='bold')
 
-def generate_player_dashboard(df, pname, team_name, color):
-    # Calcular estadísticas resumidas
+def generate_player_dashboard(df, pname, team_name=None, color='#3d85c6'):
+    # Encontrar team_name si no se provee
+    if not team_name:
+        found = df[df['name'] == pname]['teamName'].unique()
+        team_name = found[0] if len(found) > 0 else "Unknown"
+        
     player_df = df[df['name'] == pname]
+    if player_df.empty: return None
+    
+    # Calcular estadísticas resumidas
     passes = player_df[player_df['type_name'] == 'Pass']
     acc_passes = passes[passes['outcomeType_name'] == 'Successful']
     pass_acc = (len(acc_passes) / len(passes) * 100) if not passes.empty else 0
-    total_xt = player_df['xT'].sum()
-    prog_dist = player_df['prog_pass'].sum() + player_df['prog_carry'].sum()
-    def_acts = player_df[player_df['type_name'].isin(['Tackle', 'Interception', 'BallRecovery', 'Clearance', 'BlockedPass', 'Foul'])]
+    total_xt = player_df['xT'].sum() if 'xT' in player_df.columns else 0
+    prog_dist = (player_df['prog_pass'].sum() if 'prog_pass' in player_df.columns else 0) + \
+                (player_df['prog_carry'].sum() if 'prog_carry' in player_df.columns else 0)
     
-    # Crear dashboard 3x2 para más información
+    def_types = ['Tackle', 'Interception', 'BallRecovery', 'Clearance', 'BlockedPass', 'Foul']
+    def_acts = player_df[player_df['type_name'].isin(def_types)]
+    
+    # Crear dashboard 3x2
     fig = plt.figure(figsize=(18, 12), facecolor=bg_color)
     gs = GridSpec(2, 3, figure=fig)
     
-    # 1. Mapa de Calor (0, 0)
+    # 1. Mapa de Calor
     ax1 = fig.add_subplot(gs[0, 0])
     plot_player_heatmap(df, pname, ax1)
     
-    # 2. Pases (0, 1)
+    # 2. Pases
     ax2 = fig.add_subplot(gs[0, 1])
     plot_player_passes(df, pname, ax2, color)
     
-    # 3. Acciones Defensivas (0, 2)
+    # 3. Acciones Defensivas
     ax3 = fig.add_subplot(gs[0, 2])
     plot_player_defensive_acts(df, pname, ax3, color)
     
-    # 4. Conducciones (1, 0)
+    # 4. Conducciones
     ax4 = fig.add_subplot(gs[1, 0])
     pitch = Pitch(pitch_type='uefa', pitch_color=bg_color, line_color=line_color, linewidth=2)
     pitch.draw(ax=ax4)
-    carries = player_df[player_df['type'] == 'Carry']
+    carries = player_df[player_df['type_name'] == 'Carry']
     for _, c in carries.iterrows():
         ax4.annotate('', xy=(c['endX'], c['endY']), xytext=(c['x'], c['y']),
                           arrowprops=dict(arrowstyle='->', color=color, lw=1.5, alpha=0.6))
     ax4.set_title(f"Conducciones: {pname}", color=line_color, fontsize=12, fontweight='bold')
     
-    # 5. Tiros / xG (1, 1)
+    # 5. Tiros
     ax5 = fig.add_subplot(gs[1, 1])
     pitch.draw(ax=ax5)
-    shots = player_df[player_df['type_name'].isin(['ShotOnPost', 'SavedShot', 'MissedShots', 'Goal'])]
+    shot_types = ['ShotOnPost', 'SavedShot', 'MissedShots', 'Goal']
+    shots = player_df[player_df['type_name'].isin(shot_types)]
     for _, shot in shots.iterrows():
         is_goal = shot['type_name'] == 'Goal'
         ax5.scatter(shot['x'], shot['y'], s=200 if is_goal else 100, color='gold' if is_goal else color, 
                    marker='o' if is_goal else 'x', edgecolors='black', zorder=3)
     ax5.set_title(f"Tiros: {pname}", color=line_color, fontsize=12, fontweight='bold')
     
-    # 6. Panel de Estadísticas (1, 2)
+    # 6. Panel de Estadísticas
     ax6 = fig.add_subplot(gs[1, 2])
     ax6.axis('off')
     stats_text = (
@@ -561,9 +577,8 @@ def generate_player_dashboard(df, pname, team_name, color):
     
     plt.tight_layout()
     buf = BytesIO()
-    plt.savefig(buf, format='png')
-    plt.savefig(os.path.join(STATIC_DIR, f"player_{pname.replace(' ', '_')}.png"))
-    plt.close()
+    plt.savefig(buf, format='png', dpi=100, bbox_inches='tight', facecolor=fig.get_facecolor())
+    plt.close(fig)
     
     buf.seek(0)
     img_base64 = base64.b64encode(buf.read()).decode('utf-8')
@@ -631,8 +646,23 @@ def generate_all_reports(df, teams_dict):
             'Transición': [],
             'Defensa': [],
             'Jugadores': []
+        },
+        'players_list': {
+            hteam: [],
+            ateam: []
         }
     }
+    
+    # Player List Metadata
+    for _, prow in players_df.iterrows():
+        p_team = prow['teamId']
+        t_name = teams_dict.get(p_team)
+        if t_name in results['players_list']:
+            results['players_list'][t_name].append({
+                'name': prow['name'],
+                'shirtNo': prow['shirtNo'],
+                'position': prow['position']
+            })
     
     # 1. Momentum (Global)
     fig, ax = plt.subplots(figsize=(16, 6), facecolor=bg_color)
@@ -701,27 +731,10 @@ def generate_all_reports(df, teams_dict):
         'label': f'Mapa Defensivo: {ateam}', 'team': ateam
     })
     
-    # 3. Jugadores
-    all_players = df.groupby(['name', 'teamName']).size().reset_index(name='count')
-    all_players = all_players[all_players['count'] >= 5]
+    # 3. Jugadores (Ahora se generan On-demand)
+    # Solo nos aseguramos de que la categoría exista en el dict de imágenes
+    # El resto de la lógica de población de players_list ya está al inicio de la función
     
-    for _, row in all_players.iterrows():
-        pname = row['name']
-        tname = row['teamName']
-        if pname == 'Unknown' or not pname: continue
-        
-        color = col1 if tname == hteam else col2
-        try:
-            img_path = generate_player_dashboard(df, pname, tname, color)
-            results['categories']['Jugadores'].append({
-                'name': img_path, 
-                'label': f'Dashboard: {pname}', 
-                'team': tname,
-                'player': pname
-            })
-        except Exception as e:
-            print(f"Error generando dashboard para {pname}: {e}")
-            
     return results
 
 # Estado global del análisis
@@ -869,6 +882,32 @@ def analyze():
             return jsonify({"message": "Anlisis iniciado"})
     except Exception as e:
         print(f"DEBUG: Error in /analyze route: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/analyze_player', methods=['POST'])
+def analyze_player():
+    try:
+        data = request.json
+        url = data.get('url')
+        player_name = data.get('player')
+        
+        if not url or not player_name:
+            return jsonify({"error": "Missing url or player"}), 400
+            
+        # Para Vercel, re-procesamos rápidamente (el scraping es lo que más tarda)
+        html_path = fetch_whoscored_html(url)
+        df, teams_dict, players_df = process_match(html_path)
+        
+        # Generar Dashboard
+        img_base64 = generate_player_dashboard(df, player_name)
+        
+        return jsonify({
+            "player": player_name,
+            "image": img_base64
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @app.route('/status')
