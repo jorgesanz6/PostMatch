@@ -158,7 +158,7 @@ def cumulative_match_mins(events_df):
     
     return match_events
 
-def insert_ball_carries(events_df, min_carry_length=3, max_carry_length=60, min_carry_duration=1, max_carry_duration=10):
+def insert_ball_carries(events_df, min_carry_length=2, max_carry_length=60, min_carry_duration=1, max_carry_duration=12):
     match_events = events_df.reset_index(drop=True)
     match_carries = []
     
@@ -405,7 +405,7 @@ def plot_progressive_actions(df, team_name, ax, color, action_type='Pass'):
     type_filter = 'Pass' if action_type == 'Pass' else 'Carry'
     
     # WhoScored markers etc.
-    actions = df[(df['teamName'] == team_name) & (df['type_name'] == type_filter) & (df[col_name] >= 9.144)] # 10 yards
+    actions = df[(df['teamName'] == team_name) & (df['type_name'] == type_filter) & (df[col_name] >= 7.0)] # 8+ meters
     
     if actions.empty: return
     
@@ -437,6 +437,24 @@ def plot_box_entries(df, team_name, ax, color):
                     arrowprops=dict(arrowstyle='->', color=color, lw=1.5, alpha=0.6))
         
     ax.set_title(f"Entradas al Área: {team_name}", color=line_color, fontsize=14)
+
+def plot_team_defensive_actions(df, team_name, ax, color):
+    pitch = Pitch(pitch_type='uefa', pitch_color=bg_color, line_color=line_color, linewidth=2)
+    pitch.draw(ax=ax)
+    
+    def_types = ['Tackle', 'Interception', 'BallRecovery', 'Clearance', 'BlockedPass']
+    def_acts = df[(df['teamName'] == team_name) & (df['type_name'].isin(def_types))]
+    
+    if def_acts.empty: return
+    
+    # Heatmap of defensive actions
+    sns.kdeplot(x=def_acts.x, y=def_acts.y, ax=ax, fill=True, cmap='Blues', alpha=0.3, levels=5)
+    
+    # Significant actions
+    for _, act in def_acts.iterrows():
+        ax.scatter(act['x'], act['y'], s=80, color=color, marker='o', edgecolors='black', zorder=3, alpha=0.6)
+        
+    ax.set_title(f"Acciones Defensivas Totales: {team_name}", color=line_color, fontsize=14, fontweight='bold')
 
 def plot_player_heatmap(df, pname, ax):
     pitch = Pitch(pitch_type='uefa', pitch_color=bg_color, line_color=line_color, linewidth=2)
@@ -652,6 +670,10 @@ def generate_all_reports(df, teams_dict):
         'name': save_granular_chart(df, hteam, plot_box_entries, f'box_entries_{hteam}.png', col1),
         'label': f'Entradas al Área: {hteam}', 'team': hteam
     })
+    results['categories']['Defensa'].append({
+        'name': save_granular_chart(df, hteam, plot_team_defensive_actions, f'def_actions_{hteam}.png', col1),
+        'label': f'Mapa Defensivo: {hteam}', 'team': hteam
+    })
     
     # Away Team
     results['categories']['General'].append({
@@ -673,6 +695,10 @@ def generate_all_reports(df, teams_dict):
     results['categories']['Ataque'].append({
         'name': save_granular_chart(df, ateam, plot_box_entries, f'box_entries_{ateam}.png', col2),
         'label': f'Entradas al Área: {ateam}', 'team': ateam
+    })
+    results['categories']['Defensa'].append({
+        'name': save_granular_chart(df, ateam, plot_team_defensive_actions, f'def_actions_{ateam}.png', col2),
+        'label': f'Mapa Defensivo: {ateam}', 'team': ateam
     })
     
     # 3. Jugadores
