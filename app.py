@@ -20,22 +20,28 @@ from matplotlib.gridspec import GridSpec
 from mplsoccer import Pitch, VerticalPitch
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.patheffects as path_effects
-from flask import Flask, render_template, url_for, request, jsonify
+from flask import Flask, render_template, url_for, request, jsonify, send_from_directory
 from unidecode import unidecode
 import matplotlib.patches as patches
 from scipy.spatial import ConvexHull
 from PIL import Image
 from urllib.request import urlopen
 
-app = Flask(__name__)
-
 # Configuración de rutas
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-STATIC_DIR = os.path.join(BASE_DIR, 'static')
+
+# Vercel handling: Use /tmp for generated images as the deployment is read-only
+if os.environ.get('VERCEL'):
+    STATIC_DIR = '/tmp'
+else:
+    STATIC_DIR = os.path.join(BASE_DIR, 'static')
+
 XT_GRID_PATH = os.path.join(BASE_DIR, 'xT_Grid.csv')
 
 if not os.path.exists(STATIC_DIR):
-    os.makedirs(STATIC_DIR)
+    os.makedirs(STATIC_DIR, exist_ok=True)
+
+app = Flask(__name__, static_folder=STATIC_DIR)
 
 # Colores personalizados (del script original)
 green = '#69f900'
@@ -824,8 +830,13 @@ match_data_cache = {
     'ateam': ''
 }
 
+@app.route('/static/<path:filename>')
+def serve_static(filename):
+    return send_from_directory(STATIC_DIR, filename)
+
 @app.route('/')
 def index():
+    # ... (rest of the code)
     global match_data_cache
     title = "Análisis Postpartido"
     images = match_data_cache.get('images', {})
