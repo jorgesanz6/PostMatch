@@ -826,6 +826,7 @@ def run_analysis_task(url, match_id):
         match_data_cache['summary'] = summary
         match_data_cache['hteam'] = reports_data['hteam']
         match_data_cache['ateam'] = reports_data['ateam']
+        match_data_cache['players_list'] = reports_data['players_list']
         
         analysis_progress['status'] = 'Análisis Completado con éxito!'
         analysis_progress['progress'] = 100
@@ -875,7 +876,8 @@ def analyze():
                     "images": match_data_cache.get('images'),
                     "summary": match_data_cache.get('summary'),
                     "hteam": match_data_cache.get('hteam'),
-                    "ateam": match_data_cache.get('ateam')
+                    "ateam": match_data_cache.get('ateam'),
+                    "players_list": match_data_cache.get('players_list')
                 }
             })
         else:
@@ -898,9 +900,14 @@ def analyze_player():
         if not url or not player_name:
             return jsonify({"error": "Missing url or player"}), 400
             
-        # Para Vercel, re-procesamos rápidamente (el scraping es lo que más tarda)
-        html_path = fetch_whoscored_html(url)
-        df, teams_dict, players_df = process_match(html_path)
+        # Usar caché si está disponible para evitar re-scraping masivo
+        if match_data_cache.get('df') is not None:
+            df = match_data_cache.get('df')
+        else:
+            # Si no hay caché, toca procesar (pero es probable que dé timeout en Vercel)
+            html_path = fetch_whoscored_html(url)
+            df, teams_dict, players_df = process_match(html_path)
+            match_data_cache['df'] = df # Guardar en caché para la siguiente
         
         # Generar Dashboard
         img_base64 = generate_player_dashboard(df, player_name)
