@@ -214,31 +214,50 @@
                 {% if cat == 'Jugadores' %}
                     <div class="player-selector-container" style="grid-column: 1 / -1; background: #1c2128; padding: 30px; border-radius: 16px; border: 1px solid #30363d;">
                         <h3 style="margin-top:0; color:var(--secondary);">Análisis de Jugadores</h3>
-                        <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:20px;">
-                            <div style="flex:1; min-width:250px;">
-                                <label style="display:block; margin-bottom:10px; color:#8b949e;">Jugador 1</label>
-                                <select id="player-select-1" style="width:100%; padding:12px; background:#0d1117; color:white; border:1px solid #30363d; border-radius:8px;">
-                                    <option value="">Selecciona un jugador...</option>
-                                </select>
+                        
+                        <!-- Contenedor de Selectores -->
+                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:20px; margin-bottom:20px;">
+                            <!-- Jugador 1 -->
+                            <div class="selector-box" style="background:#0d1117; padding:20px; border-radius:12px; border:1px solid #30363d;">
+                                <h4 style="margin-top:0; color:#8b949e; font-size:14px; text-transform:uppercase;">Jugador 1</h4>
+                                <div style="display:flex; flex-direction:column; gap:10px;">
+                                    <select id="team-select-1" onchange="updatePlayerList(1)" style="width:100%; padding:10px; background:#1c2128; color:white; border:1px solid #30363d; border-radius:6px;">
+                                        <option value="">Selecciona Equipo...</option>
+                                    </select>
+                                    <select id="player-select-1" style="width:100%; padding:10px; background:#1c2128; color:white; border:1px solid #30363d; border-radius:6px;">
+                                        <option value="">Selecciona Jugador...</option>
+                                    </select>
+                                    <button onclick="requestPlayerAnalysis(1)" id="btn-analyze-1" style="width:100%; margin-top:5px;">Ver Análisis</button>
+                                </div>
                             </div>
-                            <div id="compare-col" style="flex:1; min-width:250px; display:none;">
-                                <label style="display:block; margin-bottom:10px; color:#8b949e;">Jugador 2 (Comparativa)</label>
-                                <select id="player-select-2" style="width:100%; padding:12px; background:#0d1117; color:white; border:1px solid #30363d; border-radius:8px;">
-                                    <option value="">Selecciona un jugador...</option>
-                                </select>
+
+                            <!-- Jugador 2 (Comparativa) -->
+                            <div id="compare-col" class="selector-box" style="background:#0d1117; padding:20px; border-radius:12px; border:1px solid #30363d; display:none;">
+                                <h4 style="margin-top:0; color:#8b949e; font-size:14px; text-transform:uppercase;">Jugador 2</h4>
+                                <div style="display:flex; flex-direction:column; gap:10px;">
+                                    <select id="team-select-2" onchange="updatePlayerList(2)" style="width:100%; padding:10px; background:#1c2128; color:white; border:1px solid #30363d; border-radius:6px;">
+                                        <option value="">Selecciona Equipo...</option>
+                                    </select>
+                                    <select id="player-select-2" style="width:100%; padding:10px; background:#1c2128; color:white; border:1px solid #30363d; border-radius:6px;">
+                                        <option value="">Selecciona Jugador...</option>
+                                    </select>
+                                    <button onclick="requestPlayerAnalysis(2)" id="btn-analyze-2" style="width:100%; margin-top:5px;">Ver Análisis</button>
+                                </div>
                             </div>
                         </div>
+
                         <div style="display:flex; gap:15px;">
-                            <button onclick="requestPlayerAnalysis(1)" id="btn-analyze-1">Ver Análisis</button>
-                            <button onclick="toggleComparison()" id="btn-compare" style="background:transparent; border:1px solid var(--secondary); color:var(--secondary);">Añadir Comparación</button>
+                            <button onclick="toggleComparison()" id="btn-compare" style="background:transparent; border:1px solid var(--secondary); color:var(--secondary); padding:8px 16px;">
+                                <span id="compare-text">Añadir Comparación</span>
+                            </button>
                         </div>
                         
-                        <div id="player-results-grid" style="display:grid; grid-template-columns: 1fr; gap:20px; margin-top:30px;">
-                            <div id="player-card-1" class="card" style="display:none; cursor:default;">
-                                <img src="" id="player-img-1" onclick="openModal(this.src)" style="cursor:zoom-in;">
+                        <div id="player-results-grid" style="display:grid; grid-template-columns: 1fr; gap:25px; margin-top:30px;">
+                            <div id="player-card-1" class="card" style="display:none; cursor:default; background:rgba(255,255,255,0.02);">
+                                <img src="" id="player-img-1" onclick="openModal(this.src)" style="cursor:zoom-in; width:100%; border-radius:12px;">
                             </div>
-                            <div id="player-card-2" class="card" style="display:none; cursor:default;">
-                                <img src="" id="player-img-2" onclick="openModal(this.src)" style="cursor:zoom-in;">
+                            <div id="player-card-2" class="card" style="display:none; cursor:default; background:rgba(255,255,255,0.02);">
+                                <img src="" id="player-img-2" onclick="openModal(this.src)" style="cursor:zoom-in; width:100%; border-radius:12px;">
                             </div>
                         </div>
                     </div>
@@ -332,8 +351,10 @@
             const tabsContainer = document.getElementById('tabs-container');
             tabsContainer.innerHTML = '';
             const resultsArea = document.getElementById('results-area');
-            resultsArea.innerHTML = '';
-
+            
+            // Preservar el contenido de 'Jugadores' si ya existe o reconstruir
+            const existingPlayerContent = document.querySelector('.player-selector-container');
+            
             Object.entries(res.images).forEach(([cat, imgs], idx) => {
                 const btn = document.createElement('button');
                 btn.className = `tab-btn ${idx === 0 ? 'active' : ''}`;
@@ -341,36 +362,22 @@
                 btn.onclick = (e) => showTab(cat, e.target);
                 tabsContainer.appendChild(btn);
 
-                const grid = document.createElement('div');
-                grid.className = 'results-grid tab-content';
-                grid.id = 'tab-' + cat;
-                grid.style.display = idx === 0 ? 'grid' : 'none';
-
                 if (cat === 'Jugadores') {
-                    grid.innerHTML = `
-                        <div class="player-selector-container" style="grid-column: 1 / -1; background: #1c2128; padding: 30px; border-radius: 16px; border: 1px solid #30363d;">
-                            <h3 style="margin-top:0; color:var(--secondary);">Análisis de Jugadores</h3>
-                            <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:20px;">
-                                <div style="flex:1; min-width:200px;">
-                                    <label style="display:block; margin-bottom:10px; color:#8b949e;">Jugador 1</label>
-                                    <select id="player-select-1" style="width:100%; padding:12px; background:#0d1117; color:white; border:1px solid #30363d; border-radius:8px;"></select>
-                                </div>
-                                <div id="compare-col" style="flex:1; min-width:200px; display:none;">
-                                    <label style="display:block; margin-bottom:10px; color:#8b949e;">Jugador 2 (Comparativa)</label>
-                                    <select id="player-select-2" style="width:100%; padding:12px; background:#0d1117; color:white; border:1px solid #30363d; border-radius:8px;"></select>
-                                </div>
-                            </div>
-                            <div style="display:flex; gap:15px;">
-                                <button onclick="requestPlayerAnalysis(1)" id="btn-analyze-1">Ver Análisis</button>
-                                <button onclick="toggleComparison()" id="btn-compare" style="background:transparent; border:1px solid var(--secondary); color:var(--secondary);">Añadir Comparación</button>
-                            </div>
-                            <div id="player-results-grid" style="display:grid; grid-template-columns: 1fr; gap:20px; margin-top:30px;">
-                                <div id="player-card-1" class="card" style="display:none; cursor:default;"><img src="" id="player-img-1" onclick="openModal(this.src)" style="cursor:zoom-in;"></div>
-                                <div id="player-card-2" class="card" style="display:none; cursor:default;"><img src="" id="player-img-2" onclick="openModal(this.src)" style="cursor:zoom-in;"></div>
-                            </div>
-                        </div>`;
-                    populatePlayerSelects();
+                    // El contenedor ya está en el HTML inicial, solo necesitamos poblar los selectores de equipos
+                    populateTeamSelects();
+                    const tabJ = document.getElementById('tab-Jugadores');
+                    if (tabJ) tabJ.style.display = idx === 0 ? 'grid' : 'none';
                 } else {
+                    let grid = document.getElementById('tab-' + cat);
+                    if (!grid) {
+                        grid = document.createElement('div');
+                        grid.className = 'results-grid tab-content';
+                        grid.id = 'tab-' + cat;
+                        resultsArea.appendChild(grid);
+                    }
+                    grid.innerHTML = '';
+                    grid.style.display = idx === 0 ? 'grid' : 'none';
+                    
                     imgs.forEach(img => {
                         const card = document.createElement('div');
                         card.className = 'card';
@@ -380,46 +387,57 @@
                         grid.appendChild(card);
                     });
                 }
-                resultsArea.appendChild(grid);
             });
         }
 
-        function populatePlayerSelects() {
-            const s1 = document.getElementById('player-select-1');
-            const s2 = document.getElementById('player-select-2');
-            if(!s1 || !s2) return;
-            s1.innerHTML = '<option value="">Selecciona un jugador...</option>';
-            s2.innerHTML = '<option value="">Selecciona un jugador...</option>';
+        function populateTeamSelects() {
+            const t1 = document.getElementById('team-select-1');
+            const t2 = document.getElementById('team-select-2');
+            if (!t1 || !t2) return;
             
-            Object.entries(globalPlayersList).forEach(([team, players]) => {
-                const group1 = document.createElement('optgroup');
-                group1.label = team;
-                const group2 = document.createElement('optgroup');
-                group2.label = team;
-                
-                players.sort((a,b) => a.name.localeCompare(b.name)).forEach(p => {
-                    const opt = document.createElement('option');
-                    opt.value = p.name;
-                    opt.innerText = `${p.shirtNo}. ${p.name} (${p.position})`;
-                    group1.appendChild(opt);
-                    group2.appendChild(opt.cloneNode(true));
-                });
-                s1.appendChild(group1);
-                s2.appendChild(group2);
+            const teams = Object.keys(globalPlayersList);
+            t1.innerHTML = '<option value="">Selecciona Equipo...</option>';
+            t2.innerHTML = '<option value="">Selecciona Equipo...</option>';
+            
+            teams.forEach(team => {
+                const opt = document.createElement('option');
+                opt.value = team;
+                opt.innerText = team;
+                t1.appendChild(opt);
+                t2.appendChild(opt.cloneNode(true));
             });
+        }
+
+        function updatePlayerList(num) {
+            const team = document.getElementById('team-select-' + num).value;
+            const pSelect = document.getElementById('player-select-' + num);
+            pSelect.innerHTML = '<option value="">Selecciona Jugador...</option>';
+            
+            if (team && globalPlayersList[team]) {
+                globalPlayersList[team]
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .forEach(p => {
+                        const opt = document.createElement('option');
+                        opt.value = p.name;
+                        opt.innerText = `${p.shirtNo}. ${p.name} (${p.position})`;
+                        pSelect.appendChild(opt);
+                    });
+            }
         }
 
         function toggleComparison() {
             const col = document.getElementById('compare-col');
             const grid = document.getElementById('player-results-grid');
+            const btnText = document.getElementById('compare-text');
+            
             if (col.style.display === 'none') {
                 col.style.display = 'block';
                 grid.style.gridTemplateColumns = '1fr 1fr';
-                document.getElementById('btn-compare').innerText = 'Quitar Comparación';
+                btnText.innerText = 'Quitar Comparación';
             } else {
                 col.style.display = 'none';
                 grid.style.gridTemplateColumns = '1fr';
-                document.getElementById('btn-compare').innerText = 'Añadir Comparación';
+                btnText.innerText = 'Añadir Comparación';
                 document.getElementById('player-card-2').style.display = 'none';
             }
         }
@@ -428,9 +446,9 @@
             const player = document.getElementById('player-select-' + num).value;
             if (!player) return alert("Selecciona un jugador");
             
-            const btn = document.getElementById('btn-analyze-1');
+            const btn = document.getElementById('btn-analyze-' + num);
             const oldText = btn.innerText;
-            btn.innerText = "Analizando...";
+            btn.innerText = "Cargando...";
             btn.disabled = true;
 
             try {
@@ -446,7 +464,7 @@
                 } else {
                     alert("Error: " + data.error);
                 }
-            } catch (err) { alert("Error al cargar jugador"); }
+            } catch (err) { alert("Error al conectar con el servidor."); }
             
             btn.innerText = oldText;
             btn.disabled = false;

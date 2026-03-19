@@ -405,7 +405,8 @@ def plot_progressive_actions(df, team_name, ax, color, action_type='Pass'):
     type_filter = 'Pass' if action_type == 'Pass' else 'Carry'
     
     # WhoScored markers etc.
-    actions = df[(df['teamName'] == team_name) & (df['type_name'] == type_filter) & (df[col_name] >= 7.0)] # 8+ meters
+    # Bajar umbral a 5m ( WhoScored usa yardas, 5m son aprox 5.5 yardas)
+    actions = df[(df['teamName'] == team_name) & (df['type_name'] == type_filter) & (df[col_name] >= 5.0)]
     
     if actions.empty: return
     
@@ -653,16 +654,19 @@ def generate_all_reports(df, teams_dict):
         }
     }
     
-    # Player List Metadata
+    # Player List Metadata - Asegurar que no hay duplicados y nombres limpios
     for _, prow in players_df.iterrows():
         p_team = prow['teamId']
         t_name = teams_dict.get(p_team)
         if t_name in results['players_list']:
-            results['players_list'][t_name].append({
-                'name': prow['name'],
-                'shirtNo': prow['shirtNo'],
-                'position': prow['position']
-            })
+            p_name = unidecode(str(prow['name'])) if pd.notnull(prow['name']) else "Unknown"
+            # Evitar duplicados en la lista de metadatos
+            if not any(p['name'] == p_name for p in results['players_list'][t_name]):
+                results['players_list'][t_name].append({
+                    'name': p_name,
+                    'shirtNo': prow['shirtNo'],
+                    'position': prow['position']
+                })
     
     # 1. Momentum (Global)
     fig, ax = plt.subplots(figsize=(16, 6), facecolor=bg_color)
