@@ -244,12 +244,82 @@
             if (!url) return alert("Ingresa una URL de WhoScored");
             
             document.getElementById('status-box').style.display = 'block';
+            document.getElementById('status-text').innerText = "Analizando (esto puede tardar 20-30s en Vercel)...";
+            document.getElementById('progress-fill').style.width = '10%';
             
             fetch('/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url: url })
-            }).then(r => r.ok ? poll() : alert("Error al iniciar"));
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.results) {
+                    // Caso Vercel: Resultados síncronos
+                    renderResults(data.results);
+                } else if (data.message) {
+                    // Caso Local: Segundo plano
+                    poll();
+                } else {
+                    alert("Error: " + (data.error || "Desconocido"));
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Error en la conexión. Vercel puede haber agotado el tiempo (timeout).");
+            });
+        }
+
+        function renderResults(res) {
+            document.getElementById('status-text').innerText = "¡Completado!";
+            document.getElementById('progress-fill').style.width = '100%';
+            
+            // 1. Mostrar Resumen
+            let summaryDiv = document.getElementById('summary-content');
+            if (!summaryDiv) {
+                summaryDiv = document.createElement('div');
+                summaryDiv.className = 'summary-container';
+                summaryDiv.id = 'summary-content';
+                document.querySelector('.legend').after(summaryDiv);
+            }
+            summaryDiv.innerHTML = marked.parse(res.summary);
+
+            // 2. Generar Tabs y Contenido
+            const tabsDiv = document.createElement('div');
+            tabsDiv.className = 'tabs';
+            const resultsArea = document.createElement('div');
+            resultsArea.id = 'results-area';
+
+            Object.entries(res.images).forEach(([cat, imgs], idx) => {
+                const btn = document.createElement('button');
+                btn.className = `tab-btn ${idx === 0 ? 'active' : ''}`;
+                btn.innerText = cat;
+                btn.onclick = (e) => showTab(cat, e.target);
+                tabsDiv.appendChild(btn);
+
+                const grid = document.createElement('div');
+                grid.className = 'results-grid tab-content';
+                grid.id = 'tab-' + cat;
+                grid.style.display = idx === 0 ? 'grid' : 'none';
+
+                imgs.forEach(img => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.onclick = () => openModal(img.name);
+                    card.innerHTML = `<img src="${img.name}" alt="${img.label}"><div class="card-label">${img.label}</div>`;
+                    grid.appendChild(card);
+                });
+                resultsArea.appendChild(grid);
+            });
+
+            // Limpiar área vieja y añadir nueva
+            const oldTabs = document.querySelector('.tabs');
+            const oldArea = document.getElementById('results-area');
+            if (oldTabs) oldTabs.remove();
+            if (oldArea) oldArea.remove();
+            
+            summaryDiv.after(tabsDiv);
+            tabsDiv.after(resultsArea);
         }
 
         function poll() {

@@ -26,6 +26,7 @@ import matplotlib.patches as patches
 from scipy.spatial import ConvexHull
 from PIL import Image
 from urllib.request import urlopen
+import base64
 
 # Configuración de rutas
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -541,10 +542,14 @@ def generate_player_dashboard(df, pname, team_name, color):
             color=line_color, fontweight='bold', bbox=dict(facecolor='white', alpha=0.1, pad=10))
     
     plt.tight_layout()
-    dash_path = f"player_{pname.replace(' ', '_')}.png"
-    plt.savefig(os.path.join(STATIC_DIR, dash_path))
+    buf = BytesIO()
+    plt.savefig(buf, format='png')
+    plt.savefig(os.path.join(STATIC_DIR, f"player_{pname.replace(' ', '_')}.png"))
     plt.close()
-    return dash_path
+    
+    buf.seek(0)
+    img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+    return f"data:image/png;base64,{img_base64}"
 
 def generate_global_summary(df, players_df, teams_dict):
     team_names = list(teams_dict.values())
@@ -582,13 +587,14 @@ def generate_global_summary(df, players_df, teams_dict):
     except Exception as e:
         return f"Error generando resumen: {str(e)}"
 
-def save_granular_chart(df, team_name, plot_func, filename, *args):
-    fig, ax = plt.subplots(figsize=(12, 8), facecolor=bg_color)
-    plot_func(df, team_name, ax, *args)
-    plt.tight_layout()
     plt.savefig(os.path.join(STATIC_DIR, filename))
+    
+    buf = BytesIO()
+    plt.savefig(buf, format='png')
     plt.close()
-    return filename
+    buf.seek(0)
+    img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+    return f"data:image/png;base64,{img_base64}"
 
 def generate_all_reports(df, teams_dict):
     team_names = list(teams_dict.values())
@@ -606,13 +612,16 @@ def generate_all_reports(df, teams_dict):
         }
     }
     
-    # 1. Momentum (Global)
-    fig, ax = plt.subplots(figsize=(16, 6), facecolor=bg_color)
-    plot_momentum(df, hteam, ateam, ax)
     plt.tight_layout()
     plt.savefig(os.path.join(STATIC_DIR, 'match_momentum.png'))
+    
+    buf = BytesIO()
+    plt.savefig(buf, format='png')
     plt.close()
-    results['categories']['General'].append({'name': 'match_momentum.png', 'label': 'Momentum del Partido'})
+    buf.seek(0)
+    mom_base64 = base64.b64encode(buf.read()).decode('utf-8')
+    
+    results['categories']['General'].append({'name': f'data:image/png;base64,{mom_base64}', 'label': 'Momentum del Partido'})
     
     # 2. Granular Team Charts
     # Home Team
@@ -806,12 +815,25 @@ def analyze():
         analysis_progress['status'] = 'Iniciando...'
         analysis_progress['progress'] = 1
         
-        # Iniciar tarea en segundo plano
-        thread = threading.Thread(target=run_analysis_task, args=(url, match_id))
-        thread.daemon = True
-        thread.start()
-        
-        return jsonify({"message": "Anlisis iniciado"})
+        # Iniciar tarea
+        if os.environ.get('VERCEL'):
+            # En Vercel, ejecutamos de forma síncrona para evitar que el proceso se mate
+            run_analysis_task(url, match_id)
+            return jsonify({
+                "status": "Completado",
+                "results": {
+                    "images": match_data_cache.get('images'),
+                    "summary": match_data_cache.get('summary'),
+                    "hteam": match_data_cache.get('hteam'),
+                    "ateam": match_data_cache.get('ateam')
+                }
+            })
+        else:
+            # En local, mantenemos el segundo plano
+            thread = threading.Thread(target=run_analysis_task, args=(url, match_id))
+            thread.daemon = True
+            thread.start()
+            return jsonify({"message": "Anlisis iniciado"})
     except Exception as e:
         print(f"DEBUG: Error in /analyze route: {e}")
         return jsonify({"error": str(e)}), 500
