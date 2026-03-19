@@ -774,7 +774,7 @@ def run_analysis_task(url, match_id):
         
     except Exception as e:
         print(f"DEBUG: CRITICAL ERROR in run_analysis_task: {e}")
-        error_log = os.path.join(BASE_DIR, 'CRITICAL_ERROR.txt')
+        error_log = os.path.join(STATIC_DIR, 'CRITICAL_ERROR.txt')
         with open(error_log, 'a') as f:
             f.write(f"\n--- ERROR {time.ctime()} ---\n")
             traceback.print_exc(file=f)
@@ -793,7 +793,8 @@ def analyze():
         url = data.get('url')
         match_id = data.get('match_id')
         
-        with open('server_debug.log', 'a') as f:
+        debug_log = os.path.join(STATIC_DIR, 'server_debug.log')
+        with open(debug_log, 'a') as f:
             f.write(f"{time.ctime()}: DEBUG: /analyze reached. URL: {url}\n")
         
         print(f"DEBUG: /analyze reached. URL: {url}")
