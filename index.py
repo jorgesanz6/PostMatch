@@ -634,7 +634,7 @@ def save_granular_chart(df, team_name, plot_func, filename, *args):
     img_base64 = base64.b64encode(buf.read()).decode('utf-8')
     return f"data:image/png;base64,{img_base64}"
 
-def generate_all_reports(df, teams_dict):
+def generate_all_reports(df, teams_dict, players_df):
     team_names = list(teams_dict.values())
     hteam, ateam = team_names[0], team_names[1]
     
@@ -812,7 +812,7 @@ def run_analysis_task(url, match_id):
                 
         analysis_progress['status'] = 'Generando Reportes Granulares...'
         analysis_progress['progress'] = 65
-        reports_data = generate_all_reports(df, teams)
+        reports_data = generate_all_reports(df, teams, players_df)
         
         analysis_progress['status'] = 'Generando Resumen del Partido...'
         analysis_progress['progress'] = 90
